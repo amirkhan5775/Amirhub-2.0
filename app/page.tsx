@@ -72,6 +72,7 @@ export default function App() {
   const [jpgTargetHeight, setJpgTargetHeight] = useState<number>(1000);
   const [isConvertingToJpg, setIsConvertingToJpg] = useState(false);
   const [jpgFinished, setJpgFinished] = useState(false);
+  const [jpgProcessStats, setJpgProcessStats] = useState({ total: 0, completed: 0, startTime: 0 });
 
   // --- File Size Increaser State ---
   const [targetSize, setTargetSize] = useState<number>(4); // Default 4MB
@@ -194,6 +195,9 @@ export default function App() {
   const handleSvgToJpgBatchProcess = async () => {
     if (svgToJpgFiles.length === 0 || !canvasRef.current) return;
     setIsConvertingToJpg(true);
+    setJpgFinished(false);
+    setJpgProcessStats({ total: svgToJpgFiles.length, completed: 0, startTime: Date.now() });
+    
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -223,6 +227,7 @@ export default function App() {
             };
             img.src = url;
         });
+        setJpgProcessStats(prev => ({ ...prev, completed: prev.completed + 1 }));
     }
 
     const content = await zip.generateAsync({ type: 'blob' });
@@ -450,6 +455,20 @@ export default function App() {
     const avgTimePerItem = elapsed / itemsDone;
     const remaining = processStats.total - processStats.completed;
     const timeLeftMs = avgTimePerItem * remaining;
+    
+    const minutes = Math.floor(timeLeftMs / 60000);
+    const seconds = Math.floor((timeLeftMs % 60000) / 1000);
+    return `${minutes}m ${seconds}s`;
+  };
+
+  const getJpgTimeLeft = () => {
+    if (!isConvertingToJpg || jpgProcessStats.completed <= 0) return 'Calculating...';
+    const elapsed = Date.now() - jpgProcessStats.startTime;
+    const avgTimePerItem = elapsed / jpgProcessStats.completed;
+    const remaining = jpgProcessStats.total - jpgProcessStats.completed;
+    const timeLeftMs = avgTimePerItem * remaining;
+    
+    if (timeLeftMs <= 0) return 'Finishing...';
     
     const minutes = Math.floor(timeLeftMs / 60000);
     const seconds = Math.floor((timeLeftMs % 60000) / 1000);
@@ -1016,6 +1035,32 @@ export default function App() {
                 </div>
 
                 <div className="lg:col-span-2 space-y-6">
+                  {isConvertingToJpg && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      className="bg-white p-6 rounded-3xl border border-purple-100 shadow-sm space-y-4"
+                    >
+                        <div className="flex justify-between items-center mb-2">
+                             <div className="flex flex-col">
+                               <span className="text-[10px] font-black text-purple-400 uppercase tracking-widest">Time Remaining</span>
+                               <span className="text-sm font-bold text-neutral-900">{getJpgTimeLeft()}</span>
+                             </div>
+                             <div className="text-right">
+                               <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Progress</span>
+                               <p className="text-sm font-bold text-neutral-900">{jpgProcessStats.completed} / {jpgProcessStats.total}</p>
+                             </div>
+                        </div>
+                        <div className="h-3 w-full bg-neutral-100 rounded-full overflow-hidden p-0.5 border border-neutral-50">
+                            <motion.div 
+                                initial={{ width: 0 }}
+                                animate={{ width: `${jpgProcessStats.total > 0 ? (jpgProcessStats.completed / jpgProcessStats.total) * 100 : 0}%` }}
+                                className="h-full bg-gradient-to-r from-purple-600 to-indigo-500 rounded-full shadow-[0_0_10px_rgba(147,51,234,0.3)]" 
+                            />
+                        </div>
+                    </motion.div>
+                  )}
+
                   <label className="group h-40 border-2 border-dashed border-neutral-200 rounded-3xl flex flex-col items-center justify-center bg-white hover:border-neutral-900 transition-all cursor-pointer">
                     <input 
                       type="file" 
